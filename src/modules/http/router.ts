@@ -5,38 +5,23 @@ import { BitrixClient } from "../integrations/bitrix/client.js";
 import { buildDocumentFromRows, DocType } from "../logic/documents.js";
 import { AppError, BadRequest, NotFound } from "../utils/errors.js";
 
+const toNum = (v: unknown) => Number(v);
+const toNumOpt = (v: unknown) => (v == null ? undefined : Number(v));
+
 const querySchema = z.object({
-  elemId: z
-    .string()
-    .transform((v) => Number(v))
-    .pipe(z.number().int().positive()),
+  elemId: z.string().transform(toNum).pipe(z.number().int().positive()),
   // Владелец: приоритет у краткого типа
   ownerTypeShort: z.enum(["D", "S"]).optional(), // D=Deal, S=SPA
   elemType: z.enum(["D", "S"]).optional(),
-  spaTypeId: z
-    .string()
-    .transform((v) => Number(v))
-    .optional(), // entityTypeId
+  spaTypeId: z.string().transform(toNumOpt).optional(), // entityTypeId
 
   docType: z.enum(["A", "D", "M"]), // A=Приход, D=Списание, M=Перемещение
 
-  storeId: z
-    .string()
-    .transform((v) => Number(v))
-    .optional(),
-  storeFrom: z
-    .string()
-    .transform((v) => Number(v))
-    .optional(),
-  storeTo: z
-    .string()
-    .transform((v) => Number(v))
-    .optional(),
+  storeId: z.string().transform(toNumOpt).optional(),
+  storeFrom: z.string().transform(toNumOpt).optional(),
+  storeTo: z.string().transform(toNumOpt).optional(),
 
-  responsibleId: z
-    .string()
-    .transform((v) => Number(v))
-    .optional(),
+  responsibleId: z.string().transform(toNumOpt).optional(),
   comment: z.string().max(500).optional(),
 
   ts: z.string().optional(),
@@ -49,8 +34,8 @@ function resolveOwner(q: Q): { owner: "deal" | "spa"; entityTypeId?: number } {
   if (q.ownerTypeShort === "D") return { owner: "deal" };
   if (q.ownerTypeShort === "S") return { owner: "spa" };
   if (q.elemType === "D") return { owner: "deal" };
-  if (q.elemType === "S" && q.spaTypeId)
-    return { owner: "spa", entityTypeId: Number(q.spaTypeId) };
+  if (q.elemType === "S" && q.spaTypeId != null)
+    return { owner: "spa", entityTypeId: q.spaTypeId };
   throw new BadRequest(
     "Owner not specified. Provide ownerTypeShort=D|S or elemType+spaTypeId for SPA"
   );
@@ -58,10 +43,11 @@ function resolveOwner(q: Q): { owner: "deal" | "spa"; entityTypeId?: number } {
 
 function validateStores(q: Q) {
   if (q.docType === "M") {
-    if (!q.storeFrom || !q.storeTo)
+    if (q.storeFrom == null || q.storeTo == null)
       throw new BadRequest("storeFrom and storeTo are required for docType=M");
   } else {
-    if (!q.storeId) throw new BadRequest("storeId is required for docType=A|D");
+    if (q.storeId == null)
+      throw new BadRequest("storeId is required for docType=A|D");
   }
 }
 
