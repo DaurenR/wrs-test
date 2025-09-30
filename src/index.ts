@@ -2,12 +2,12 @@ import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { router } from "./modules/http/router.js";
-import { logger } from "./modules/utils/logger.js";
+import { loggerOptions } from "./modules/utils/logger.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const app = Fastify({ logger });
+const app = Fastify({ logger: loggerOptions });
 
 await app.register(helmet, { contentSecurityPolicy: false });
 await app.register(rateLimit, {
