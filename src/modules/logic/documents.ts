@@ -1,5 +1,5 @@
 import type { ProductRow } from "../integrations/bitrix/client.js";
-import { BadRequest } from "../utils/errors.js";
+import { BadRequest, NotFound } from "../utils/errors.js";
 
 export type DocType = "A" | "D" | "M"; // A=приход, D=списание, M=перемещение
 
@@ -30,7 +30,7 @@ export function buildDocumentFromRows(params: {
   const { docType, rows, storeId, storeFrom, storeTo, comment, responsibleId } =
     params;
 
-  if (!rows?.length) throw new BadRequest("No product rows");
+  if (!rows?.length) throw new NotFound("No product rows for element");
 
   const items = rows.map((r) => ({
     productId: r.productId,
