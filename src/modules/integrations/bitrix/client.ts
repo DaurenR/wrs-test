@@ -1,5 +1,7 @@
+const MOCK = process.env.B24_MOCK === "1";
+
 import { request } from "undici";
-import type { InventoryPayload } from '../../logic/documents.js';
+import type { InventoryPayload } from "../../logic/documents.js";
 import { AppError, BadRequest } from "../../utils/errors.js";
 
 export type ProductRow = {
@@ -11,7 +13,7 @@ export type ProductRow = {
 
 export class BitrixClient {
   constructor(private readonly webhookBase?: string) {
-    if (!webhookBase) throw new BadRequest("B24_WEBHOOK_URL is not configured");
+    if (!webhookBase && !MOCK) throw new BadRequest("B24_WEBHOOK_URL is not configured");
   }
 
   private async call<T>(
@@ -34,6 +36,7 @@ export class BitrixClient {
   }
 
   async getDealProductRows(dealId: number): Promise<ProductRow[]> {
+    if (MOCK) return [{ productId: 101, quantity: 2 }];
     // crm.deal.productrows.get?ID=
     return await this.call<ProductRow[]>("crm.deal.productrows.get", {
       id: dealId,
@@ -44,6 +47,7 @@ export class BitrixClient {
     entityTypeId: number,
     ownerId: number
   ): Promise<ProductRow[]> {
+    if (MOCK) return [{ productId: 202, quantity: 5 }];
     // crm.item.productrow.list with filter { ownerId, entityTypeId }
     const result = await this.call<{ items: ProductRow[] }>(
       "crm.item.productrow.list",
@@ -58,6 +62,7 @@ export class BitrixClient {
   async createInventoryDocument(
     payload: InventoryPayload
   ): Promise<{ documentId: number; itemsProcessed?: number }> {
+    if (MOCK) return { documentId: 999, itemsProcessed: payload.items.length };
     // Пример: catalog.document.add + catalog.document.save (зависит от конкретной схемы Inventory API на портале)
     // Для тестового — одна обёртка. Ты при интеграции подставишь нужный метод: e.g. catalog.document.add
     const result = await this.call<{ document: { id: number } }>(
