@@ -58,8 +58,11 @@ export const router: FastifyPluginAsync = async (app: FastifyInstance) => {
       const parsed = querySchema.parse(req.query);
 
       // Бонус: проверка подписи
-      if (process.env.SIGN_KEY && (parsed.sig || parsed.ts)) {
-        if (!signatureOk(parsed.sig!, parsed.ts!))
+      if (process.env.SIGN_KEY) {
+        if (!parsed.sig)
+          throw new BadRequest("Query parameter sig is required");
+        if (!parsed.ts) throw new BadRequest("Query parameter ts is required");
+        if (!signatureOk(parsed.sig, parsed.ts))
           throw new BadRequest("Invalid signature");
       }
 
