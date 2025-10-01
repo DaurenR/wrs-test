@@ -1,4 +1,5 @@
 const MOCK = process.env.B24_MOCK === "1";
+const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY;
 
 import { request } from "undici";
 import type { InventoryPayload } from "../../logic/documents.js";
@@ -64,18 +65,59 @@ export class BitrixClient {
   async createInventoryDocument(
     payload: InventoryPayload
   ): Promise<{ documentId: number; itemsProcessed?: number }> {
-    if (MOCK) return { documentId: 999, itemsProcessed: payload.products.length };
-    // Пример: catalog.document.add + catalog.document.save (зависит от конкретной схемы Inventory API на портале)
-    // Для тестового — одна обёртка. Ты при интеграции подставишь нужный метод: e.g. catalog.document.add
+    if (MOCK)
+      return { documentId: 999, itemsProcessed: payload.products.length };
+
+    const currency = payload.currency || DEFAULT_CURRENCY || "KZT";
+
+    const fields: Record<string, unknown> = {
+      DOC_TYPE: payload.docType,
+      CURRENCY: currency,
+    };
+
+    if (payload.comment !== undefined) fields.COMMENT = payload.comment;
+    if (payload.responsibleId !== undefined)
+      fields.RESPONSIBLE_ID = payload.responsibleId;
+
+    if (payload.docType === "M") {
+      if (payload.storeFrom !== undefined)
+        fields.STORE_FROM = payload.storeFrom;
+      if (payload.storeTo !== undefined) fields.STORE_TO = payload.storeTo;
+    } else if (payload.storeId !== undefined) {
+      fields.STORE_ID = payload.storeId;
+    }
+
     const result = await this.call<{ document: { id: number } }>(
       "catalog.document.add",
       {
-        fields: payload,
+        fields,
       }
     );
+
+    const documentId = result.document.id;
+
+    let itemsProcessed = 0;
+    for (const product of payload.products) {
+      const productFields: Record<string, unknown> = {
+        DOCUMENT_ID: documentId,
+        PRODUCT_ID: product.productId,
+        QUANTITY: product.quantity,
+        PRICE: product.price ?? 0,
+        CURRENCY: product.currency || currency,
+      };
+
+      if (product.measureCode !== undefined)
+        productFields.MEASURE_CODE = product.measureCode;
+
+      await this.call("catalog.document.product.add", {
+        fields: productFields,
+      });
+      itemsProcessed += 1;
+    }
+
     return {
-      documentId: result.document.id,
-      itemsProcessed: payload?.products?.length,
+      documentId,
+      itemsProcessed,
     };
   }
 }
