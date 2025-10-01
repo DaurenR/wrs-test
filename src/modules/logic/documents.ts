@@ -11,6 +11,7 @@ export type InventoryPayload = {
   storeId?: number;
   storeFrom?: number;
   storeTo?: number;
+  currency?: string;
   items: Array<{
     productId: number;
     amount: number;
@@ -37,7 +38,13 @@ export function buildDocumentFromRows(params: {
     amount: Number(r.quantity),
   }));
 
-  const base = { docType, comment, responsibleId, items };
+  const base = {
+    docType,
+    comment,
+    responsibleId,
+    currency: process.env.DEFAULT_CURRENCY || "KZT",
+    items,
+  };
 
   if (docType === "M") {
     if (!storeFrom || !storeTo)
