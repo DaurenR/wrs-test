@@ -1,7 +1,14 @@
+import { request, fetch } from "undici";
+
 const MOCK = process.env.B24_MOCK === "1";
 const DEFAULT_CURRENCY = process.env.DEFAULT_CURRENCY;
 
-import { request } from "undici";
+const METHODS_TTL_MS = 5 * 60 * 1000;
+const METHODS_CACHE = new Map<
+  string,
+  { expiresAt: number; methods: Set<string> }
+>();
+
 import type { InventoryPayload } from "../../logic/documents.js";
 import { AppError, BadRequest } from "../../utils/errors.js";
 
@@ -38,6 +45,62 @@ export class BitrixClient {
     return (data.result ?? data) as T;
   }
 
+  private async loadAvailableMethods(): Promise<Set<string>> {
+    const cacheKey = this.webhookBase || "mock";
+    const cached = METHODS_CACHE.get(cacheKey);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) return cached.methods;
+
+    const baseUrl = (this.webhookBase || "").replace(/\/?$/, "/");
+    const url = `${baseUrl}methods.json`;
+
+    let payload: any;
+
+    if (MOCK) {
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new AppError(502, `Bitrix24 error: HTTP ${res.status}`);
+      }
+      payload = await res.json();
+    } else {
+      const { body: resBody, statusCode } = await request(url, {
+        method: "GET",
+      });
+      if (statusCode >= 400) {
+        throw new AppError(502, `Bitrix24 error: HTTP ${statusCode}`);
+      }
+      payload = await resBody.json();
+    }
+
+    const methods = new Set<string>((payload?.result as string[]) ?? []);
+
+    METHODS_CACHE.set(cacheKey, {
+      methods,
+      expiresAt: now + METHODS_TTL_MS,
+    });
+
+    return methods;
+  }
+
+  private async ensureInventoryApi(): Promise<void> {
+    const methods = await this.loadAvailableMethods();
+    const required = [
+      "catalog.document.add",
+      "catalog.document.product.add",
+      "catalog.store.list",
+    ];
+
+    const missing = required.filter((method) => !methods.has(method));
+    if (missing.length) {
+      throw new AppError(
+        502,
+        `Bitrix24 inventory API is not available on this webhook (missing: ${missing.join(
+          ", "
+        )}). Grant "Торговый каталог (catalog)" permission or create a new incoming webhook with catalog scope.`
+      );
+    }
+  }
+
   async getDealProductRows(dealId: number): Promise<ProductRow[]> {
     if (MOCK) return [{ productId: 101, quantity: 2 }];
     // crm.deal.productrows.get?ID=
@@ -68,6 +131,8 @@ export class BitrixClient {
     if (MOCK)
       return { documentId: 999, itemsProcessed: payload.products.length };
 
+    await this.ensureInventoryApi();
+
     const currency = payload.currency || DEFAULT_CURRENCY || "KZT";
 
     const documentFields: Record<string, unknown> = {
@@ -85,7 +150,8 @@ export class BitrixClient {
     if (payload.docType === "M") {
       if (payload.storeFrom !== undefined)
         documentFields.storeFrom = payload.storeFrom;
-      if (payload.storeTo !== undefined) documentFields.storeTo = payload.storeTo;
+      if (payload.storeTo !== undefined)
+        documentFields.storeTo = payload.storeTo;
     } else if (payload.storeId !== undefined) {
       documentFields.storeId = payload.storeId;
     }
