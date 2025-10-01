@@ -12,10 +12,12 @@ export type InventoryPayload = {
   storeFrom?: number;
   storeTo?: number;
   currency?: string;
-  items: Array<{
+  products: Array<{
     productId: number;
-    amount: number;
-    // при необходимости: price, measureCode
+    quantity: number;
+    price?: number;
+    currency?: string;
+    measureCode?: number;
   }>;
 };
 
@@ -33,17 +35,39 @@ export function buildDocumentFromRows(params: {
 
   if (!rows?.length) throw new NotFound("No product rows for element");
 
-  const items = rows.map((r) => ({
-    productId: r.productId,
-    amount: Number(r.quantity),
-  }));
+  const defaultCurrency = process.env.DEFAULT_CURRENCY || "KZT";
+
+  const products = rows.map((row) => {
+    const priceValue =
+      row.price === undefined || row.price === null
+        ? undefined
+        : Number(row.price);
+    const measureValue =
+      row.measureCode === undefined || row.measureCode === null
+        ? undefined
+        : Number(row.measureCode);
+
+    return {
+      productId: row.productId,
+      quantity: Number(row.quantity),
+      price:
+        priceValue === undefined || Number.isNaN(priceValue)
+          ? undefined
+          : priceValue,
+      currency: row.currency || defaultCurrency,
+      measureCode:
+        measureValue === undefined || Number.isNaN(measureValue)
+          ? undefined
+          : measureValue,
+    };
+  });
 
   const base = {
     docType,
     comment,
     responsibleId,
-    currency: process.env.DEFAULT_CURRENCY || "KZT",
-    items,
+    currency: defaultCurrency,
+    products,
   };
 
   if (docType === "M") {

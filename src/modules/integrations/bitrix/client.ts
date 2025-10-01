@@ -6,14 +6,16 @@ import { AppError, BadRequest } from "../../utils/errors.js";
 
 export type ProductRow = {
   productId: number;
-  quantity: number;
-  price?: number;
-  measureCode?: number;
+  quantity: number | string;
+  price?: number | string;
+  measureCode?: number | string;
+  currency?: string;
 };
 
 export class BitrixClient {
   constructor(private readonly webhookBase?: string) {
-    if (!webhookBase && !MOCK) throw new BadRequest("B24_WEBHOOK_URL is not configured");
+    if (!webhookBase && !MOCK)
+      throw new BadRequest("B24_WEBHOOK_URL is not configured");
   }
 
   private async call<T>(
@@ -53,7 +55,7 @@ export class BitrixClient {
       "crm.item.productrow.list",
       {
         filter: { ownerId, entityTypeId },
-        select: ["productId", "quantity", "price", "measureCode"],
+        select: ["productId", "quantity", "price", "measureCode", "currency"],
       }
     );
     return result.items;
@@ -62,7 +64,7 @@ export class BitrixClient {
   async createInventoryDocument(
     payload: InventoryPayload
   ): Promise<{ documentId: number; itemsProcessed?: number }> {
-    if (MOCK) return { documentId: 999, itemsProcessed: payload.items.length };
+    if (MOCK) return { documentId: 999, itemsProcessed: payload.products.length };
     // Пример: catalog.document.add + catalog.document.save (зависит от конкретной схемы Inventory API на портале)
     // Для тестового — одна обёртка. Ты при интеграции подставишь нужный метод: e.g. catalog.document.add
     const result = await this.call<{ document: { id: number } }>(
@@ -73,7 +75,7 @@ export class BitrixClient {
     );
     return {
       documentId: result.document.id,
-      itemsProcessed: payload?.items?.length,
+      itemsProcessed: payload?.products?.length,
     };
   }
 }
