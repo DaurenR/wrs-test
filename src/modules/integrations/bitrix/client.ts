@@ -70,54 +70,55 @@ export class BitrixClient {
 
     const currency = payload.currency || DEFAULT_CURRENCY || "KZT";
 
-    const fields: Record<string, unknown> = {
-      DOC_TYPE: payload.docType,
-      CURRENCY: currency,
+    const documentFields: Record<string, unknown> = {
+      docType: payload.docType,
+      currency,
     };
 
-    if (payload.comment !== undefined) fields.COMMENT = payload.comment;
+    if (payload.comment !== undefined) documentFields.comment = payload.comment;
     if (payload.responsibleId !== undefined)
-      fields.RESPONSIBLE_ID = payload.responsibleId;
+      documentFields.responsibleId = payload.responsibleId;
+
+    const title = (payload as { title?: string }).title;
+    if (title !== undefined) documentFields.title = title;
 
     if (payload.docType === "M") {
       if (payload.storeFrom !== undefined)
-        fields.STORE_FROM = payload.storeFrom;
-      if (payload.storeTo !== undefined) fields.STORE_TO = payload.storeTo;
+        documentFields.storeFrom = payload.storeFrom;
+      if (payload.storeTo !== undefined) documentFields.storeTo = payload.storeTo;
     } else if (payload.storeId !== undefined) {
-      fields.STORE_ID = payload.storeId;
+      documentFields.storeId = payload.storeId;
     }
 
     const result = await this.call<{ document: { id: number } }>(
       "catalog.document.add",
       {
-        fields,
+        fields: documentFields,
       }
     );
 
     const documentId = result.document.id;
 
-    let itemsProcessed = 0;
     for (const product of payload.products) {
       const productFields: Record<string, unknown> = {
-        DOCUMENT_ID: documentId,
-        PRODUCT_ID: product.productId,
-        QUANTITY: product.quantity,
-        PRICE: product.price ?? 0,
-        CURRENCY: product.currency || currency,
+        documentId,
+        productId: product.productId,
+        amount: product.quantity,
+        price: product.price ?? 0,
+        currency: product.currency || currency,
       };
 
       if (product.measureCode !== undefined)
-        productFields.MEASURE_CODE = product.measureCode;
+        productFields.measureCode = product.measureCode;
 
       await this.call("catalog.document.product.add", {
         fields: productFields,
       });
-      itemsProcessed += 1;
     }
 
     return {
       documentId,
-      itemsProcessed,
+      itemsProcessed: payload.products.length,
     };
   }
 }
